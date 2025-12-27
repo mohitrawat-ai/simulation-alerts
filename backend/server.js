@@ -53,32 +53,45 @@ app.get('/api/menu', (req, res) => {
   res.json(menu);
 });
 
-app.post('/api/orders', (req, res) => {
-  const { items, total, customerName } = req.body;
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { items, total, customerName } = req.body;
 
-  // Simulate random bugs that occur in production (30% chance)
-  const randomBug = Math.random();
+    // Simulate random bugs that occur in production (30% chance)
+    const randomBug = Math.random();
 
-  if (randomBug < 0.15) {
-    // Simulate database connection error
-    throw new Error('Database connection timeout - Unable to save order to database');
-  } else if (randomBug < 0.30) {
-    // Simulate payment processing error
-    const error = new Error('Payment gateway unavailable - Transaction failed');
-    error.statusCode = 503;
-    throw error;
+    if (randomBug < 0.15) {
+      // Simulate async database connection error
+      await Promise.reject(new Error('Database connection timeout - Unable to save order to database'));
+    } else if (randomBug < 0.30) {
+      // Simulate async payment processing error
+      const error = new Error('Payment gateway unavailable - Transaction failed');
+      error.statusCode = 503;
+      await Promise.reject(error);
+    }
+
+    const order = {
+      id: orders.length + 1,
+      items,
+      total,
+      customerName,
+      timestamp: new Date(),
+    };
+
+    orders.push(order);
+    res.status(201).json({ message: 'Order placed successfully!', order });
+  } catch (err) {
+    // Properly handle errors with appropriate status codes
+    const statusCode = err.statusCode || 500;
+    const message = err.message || 'Internal server error';
+    
+    // Re-throw to let Sentry capture it, but ensure response is sent
+    if (isSentryEnabled) {
+      Sentry.captureException(err);
+    }
+    
+    res.status(statusCode).json({ error: message });
   }
-
-  const order = {
-    id: orders.length + 1,
-    items,
-    total,
-    customerName,
-    timestamp: new Date(),
-  };
-
-  orders.push(order);
-  res.status(201).json({ message: 'Order placed successfully!', order });
 });
 
 app.get('/api/orders', (req, res) => {
